@@ -3,36 +3,82 @@ import altair as alt
 import math
 import pandas as pd
 import streamlit as st
+from st_aggrid import AgGrid, GridOptionsBuilder, DataReturnMode
 
-"""
-# Welcome to Streamlit!
+pd.set_option('display.max_colwidth', None)
+st.set_page_config(layout="wide")
+st.title('Narrate Lab')
 
-Edit `/streamlit_app.py` to customize this app to your heart's desire :heart:
+query_params = st.experimental_get_query_params()
+subreddit = query_params['subreddit'][0]
 
-If you have any questions, checkout our [documentation](https://docs.streamlit.io) and [community
-forums](https://discuss.streamlit.io).
+# load reports
+df_submissions = pd.read_json('./reports/{}_report_submissions.json'.format(subreddit))
+df_topic_info = pd.read_json('./reports/{}_report_topic_info.json'.format(subreddit))
 
-In the meantime, below is an example of what you can do with just a few lines of code:
-"""
+# st.table(df_topic_info)
+
+def concatenate(tokens):
+    return ['_'.join(token.split()) for token in tokens]
+
+topic_description_short = [ '#{} '.format(row['Topic']) + ' '.join(concatenate(row['Tokens'])[0:5]) + ' (count: {})'.format(row['Count']) for idx, row in df_topic_info.iterrows()]
+df_topic_info['Topic Description'] = topic_description_short
+
+topic_id = st.selectbox(
+        'Select Topic',
+        df_topic_info['Topic'], format_func = lambda topic_id: df_topic_info.loc[df_topic_info['Topic'] == topic_id, 'Topic Description'].iloc[0])
 
 
-with st.echo(code_location='below'):
-    total_points = st.slider("Number of points in spiral", 1, 5000, 2000)
-    num_turns = st.slider("Number of turns in spiral", 1, 100, 9)
+df_submissions_by_topic = df_submissions[df_submissions['topic'] == topic_id]
 
-    Point = namedtuple('Point', 'x y')
-    data = []
+df_submissions_display = df_submissions_by_topic[['title', 'num_comments', 'score']]
 
-    points_per_turn = total_points / num_turns
+gb = GridOptionsBuilder.from_dataframe(df_submissions_display)
+#gb.configure_grid_options(domLayout='normal')
+gb.configure_grid_options(defaultColDef={
+    'flex': 1,
+    'resizable': True,
+    'sortable': False,
+    'autoHeight': True,
+})
 
-    for curr_point_num in range(total_points):
-        curr_turn, i = divmod(curr_point_num, points_per_turn)
-        angle = (curr_turn + 1) * 2 * math.pi * i / points_per_turn
-        radius = curr_point_num / total_points
-        x = radius * math.cos(angle)
-        y = radius * math.sin(angle)
-        data.append(Point(x, y))
+gb.configure_grid_options(columnDefs={'title': {
+    'field': 'title',
+    'resizable': True,
+    'sortable': False,
+    'wrapText': True,
+    'autoHeight': True,
+    'minWidth': 350,
+    'cellStyle': {'white-space': 'normal', 'word-break': 'break-word'}
+},
+'num_comments': {
+    'headerName': '# comments',
+    'field': 'num_comments',
+    'flex': 1,
+    'resizable': True,
+    'sortable': True,
+    'maxWidth': 150,
+},
+'score': {
+    'headerName': 'score',
+    'field': 'score',
+    'flex': 1,
+    'resizable': True,
+    'sortable': True,
+    'maxWidth': 150,
+  }
+})
 
-    st.altair_chart(alt.Chart(pd.DataFrame(data), height=500, width=500)
-        .mark_circle(color='#0068c9', opacity=0.5)
-        .encode(x='x:Q', y='y:Q'))
+gb.configure_selection('single', use_checkbox=True)
+gridOptions = gb.build()
+grid_response = AgGrid(df_submissions_display,
+    gridOptions=gridOptions,
+    fit_columns_on_grid_load=True,
+    data_return_mode=DataReturnMode.AS_INPUT, 
+)
+
+df = grid_response['data']
+selected = grid_response['selected_rows']
+selected_df = pd.DataFrame(selected)
+
+selected_df

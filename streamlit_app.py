@@ -1,42 +1,59 @@
 from collections import namedtuple
-import altair as alt
 import math
 import pandas as pd
 import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, DataReturnMode, JsCode
-
+import plotly.graph_objects as go
 
 
 st.set_page_config(layout="wide")
 
-st.markdown("""
+st.markdown(
+    """
     <style>
     div.row-widget.stRadio > div {
         flex-direction:row;
     }
     </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 pd.set_option("display.max_colwidth", None)
 
 st.title("Narrate Lab")
 
 # default subreddit
-subreddit = 'startups'
+subreddit = "sneakers"
 
 query_params = st.experimental_get_query_params()
-if query_params and 'subreddit' in query_params:
-    subreddit = query_params['subreddit'][0]
+if query_params and "subreddit" in query_params:
+    subreddit = query_params["subreddit"][0]
 
-subreddit_list = ['startups', 'cars']
+subreddit_list = [
+    {
+        "subreddit": "startups",
+        "report_submission": "startups_report_submissions.json",
+        "report_topic": "startups_report_topic_info.json",
+    },
+    {
+        "subreddit": "sneakers",
+        "report_submission": "report_submission_sneakers_2021_01_01_2021_08_16.json",
+        "report_topic": "report_topic_sneakers_2021_01_01_2021_08_16.json",
+        "report_topic_over_time": "report_topic_over_time_sneakers_2021_01_01_2021_08_16.json",
+    },
+]
 
 subreddit = st.selectbox(
     "Select Subreddit",
-    subreddit_list,
-    index = subreddit_list.index(subreddit)
+    [item["subreddit"] for item in subreddit_list],
+    index=next(
+        idx for idx, item in enumerate(subreddit_list) if item["subreddit"] == subreddit
+    ),
 )
 
-st.markdown('''
+st.markdown(
+    """
 ## Data source: [r/{}](https://www.reddit.com//r/startups)
 
 Time Range: 2018-01-01 ~ 2021-07-19
@@ -50,12 +67,25 @@ Time Range: 2018-01-01 ~ 2021-07-19
 
 Posts are first clustered into similar topics and then sorted by num_comments/score.
 
-'''.format(subreddit))
+""".format(
+        subreddit
+    )
+)
 
 
 # load reports
-df_submissions = pd.read_json("./reports/{}_report_submissions.json".format(subreddit))
-df_topic_info = pd.read_json("./reports/{}_report_topic_info.json".format(subreddit))
+selected_subreddit_item = next(
+    item for idx, item in enumerate(subreddit_list) if item["subreddit"] == subreddit
+)
+df_submissions = pd.read_json(
+    "./reports/{}".format(selected_subreddit_item["report_submission"])
+)
+df_topic_info = pd.read_json(
+    "./reports/{}".format(selected_subreddit_item["report_topic"])
+)
+df_topic_overtime = pd.read_json(
+    "./reports/{}".format(selected_subreddit_item["report_topic_over_time"])
+)
 
 
 def concatenate(tokens):
@@ -69,6 +99,11 @@ topic_description_short = [
     for idx, row in df_topic_info.iterrows()
 ]
 df_topic_info["Topic Description"] = topic_description_short
+
+# sort by topic count in descending order
+df_topic_info =  df_topic_info.sort_values(
+    by=["Count"], ascending=False
+)
 
 topic_id = st.selectbox(
     "Select Topic",
@@ -85,25 +120,42 @@ df_submissions_display = df_submissions_by_topic[
     ["title", "num_comments", "score", "title_cat", "permalink"]
 ]
 
-question_category = sorted(df_submissions_by_topic['title_cat'].unique());
+question_category = sorted(df_submissions_by_topic["title_cat"].unique())
 question_category_count = {}
 for title_cat in question_category:
-    question_category_count[title_cat] =df_submissions_by_topic[df_submissions_by_topic["title_cat"] == title_cat].shape[0]
+    question_category_count[title_cat] = df_submissions_by_topic[
+        df_submissions_by_topic["title_cat"] == title_cat
+    ].shape[0]
 
-question_category = sorted(question_category, key = lambda title_cat: question_category_count[title_cat], reverse=True)
-question_category.insert(0, 'NONE')
-if 'NO_WH_WORD' in question_category:
-    question_category.remove('NO_WH_WORD')
+question_category = sorted(
+    question_category,
+    key=lambda title_cat: question_category_count[title_cat],
+    reverse=True,
+)
+question_category.insert(0, "NONE")
+if "NO_WH_WORD" in question_category:
+    question_category.remove("NO_WH_WORD")
 
 question_category_selection = st.radio(
     "Filter by question_category",
     question_category,
-    format_func=lambda title_cat: '{} (count: {})'.format(title_cat, question_category_count[title_cat] if title_cat != 'NONE' else len(df_submissions_by_topic)))
+    format_func=lambda title_cat: "{} (count: {})".format(
+        title_cat,
+        question_category_count[title_cat]
+        if title_cat != "NONE"
+        else len(df_submissions_by_topic),
+    ),
+)
 
-if question_category_selection != 'NONE':
-    df_submissions_display = df_submissions_display[df_submissions_display['title_cat'] == question_category_selection]
+if question_category_selection != "NONE":
+    df_submissions_display = df_submissions_display[
+        df_submissions_display["title_cat"] == question_category_selection
+    ]
 
-df_submissions_display = df_submissions_display.sort_values(by=['score'], ascending=False)
+df_submissions_display = df_submissions_display.sort_values(
+    by=["score"], ascending=False
+)
+
 
 def buildSubmissionTable(df):
     gb = GridOptionsBuilder.from_dataframe(df)
@@ -188,8 +240,118 @@ def buildSubmissionTable(df):
         gridOptions=gridOptions,
         fit_columns_on_grid_load=True,
         data_return_mode=DataReturnMode.AS_INPUT,
-        allow_unsafe_jscode=True
+        allow_unsafe_jscode=True,
     )
+
+
+def visualize_topics_over_time(df_topic_info, topics_over_time, width=1250, height=800):
+    colors = [
+        "#E69F00",
+        "#56B4E9",
+        "#009E73",
+        "#F0E442",
+        "#D55E00",
+        "#0072B2",
+        "#CC79A7",
+    ]
+
+    # convert timestamp to year-month
+    by_month = pd.to_datetime(topics_over_time['Timestamp']).dt.to_period('M')
+    topics_over_time['year_month'] = by_month
+    topics_over_time.year_month = topics_over_time.year_month.dt.strftime('%Y-%m')
+    del topics_over_time["Timestamp"]
+    del topics_over_time["Words"] # topic evolution not needed now 
+    # sum by year month
+    topics_over_time = topics_over_time.groupby(["Topic", "year_month"], as_index=False)['Frequency'].sum()
+
+    # Select topics
+    selected_topics = df_topic_info.Topic.values
+
+    # Prepare data
+    data = topics_over_time.loc[topics_over_time.Topic.isin(selected_topics), :]
+
+
+
+    # Add traces
+    fig = go.Figure()
+    for index, topic in enumerate(data.Topic.unique()):
+        trace_data = data.loc[data.Topic == topic, :]
+
+        row = df_topic_info.loc[df_topic_info["Topic"] == topic]
+        topic_name = "#{} ".format(row["Topic"].iloc[0]) + " ".join(concatenate(row["Tokens"].iloc[0])[0:5])
+
+        #topic_name = topic_name["Topic Description"].iloc[0]
+        fig.add_trace(
+            go.Scatter(
+                x=trace_data.year_month,
+                y=trace_data.Frequency,
+                line_shape="spline",
+                mode="lines+markers",
+                marker_color=colors[index % 7],
+                name=topic_name,
+                hoverlabel=dict(
+                    bgcolor="white",
+                    font_size=16,
+                    font_family="Rockwell",
+                    namelength=-1
+                ),
+                 hovertemplate="<br>".join([
+                    "Date: %{x}",
+                    "Frequency: %{y}"
+                ])
+            )
+        )
+
+    # Styling of the visualization
+    fig.update_xaxes(showgrid=True)
+    fig.update_yaxes(showgrid=True)
+    fig.update_layout(
+        xaxis_tickformat = '%Y-%b',
+        yaxis_title="Frequency",
+        title={
+            "text": "<b>Topics Trends",
+            "y": 0.95,
+            "x": 0.40,
+            "xanchor": "center",
+            "yanchor": "top",
+            "font": dict(size=22, color="Black"),
+        },
+        #template="simple_white",
+        width=width,
+        height=height,
+        legend=dict(
+            title="<b>Topics  (To show and hide a topic, click the topic name below) </b>",
+            xanchor="center",
+            yanchor="top",
+            y=-0.3,
+            x=0.5
+        ),
+    )
+    return fig
+
 
 # buildTopicTable(df_topic_info)
 buildSubmissionTable(df_submissions_display)
+
+
+st.header("Topic Trends")
+st.markdown(
+    """
+The following figure shows you how often a particular topic has been mentioned in each month in the subreddit.
+You can see how the frequency of a topic changes over time. A higher number means that the percentage of posts mentioning that topic are higher.
+"""
+)
+
+# topic over time
+top_k_percent = st.slider(
+    "Show Only Most Frequent Topics (by the total number of mentions in the time range)",
+    min_value = 10,
+    max_value = 100,
+    value=100,
+    step = 10,
+    format='Top %d Percent Most Frequent Topics'
+)
+
+df_top_topics = df_topic_info[1: math.floor(top_k_percent * (len(df_topic_info)-1) / 100.0)]
+topic_over_time_fig = visualize_topics_over_time(df_top_topics, df_topic_overtime)
+st.plotly_chart(topic_over_time_fig, use_container_width=True)

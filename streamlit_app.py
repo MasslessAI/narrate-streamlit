@@ -4,7 +4,9 @@ import pandas as pd
 import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, DataReturnMode, JsCode
 import plotly.graph_objects as go
-
+from datetime import datetime
+import glob
+from collections import defaultdict
 
 st.set_page_config(layout="wide")
 
@@ -30,19 +32,25 @@ query_params = st.experimental_get_query_params()
 if query_params and "subreddit" in query_params:
     subreddit = query_params["subreddit"][0]
 
-subreddit_list = [
-    {
-        "subreddit": "startups",
-        "report_submission": "startups_report_submissions.json",
-        "report_topic": "startups_report_topic_info.json",
-    },
-    {
-        "subreddit": "sneakers",
-        "report_submission": "report_submission_sneakers_2021_01_01_2021_08_16.json",
-        "report_topic": "report_topic_sneakers_2021_01_01_2021_08_16.json",
-        "report_topic_over_time": "report_topic_over_time_sneakers_2021_01_01_2021_08_16.json",
-    },
-]
+all_reports = [f for f in glob.glob("./reports/*.json")]
+subreddit_list = defaultdict(dict)
+
+for report in all_reports:
+    splits = report.split('_')
+    subreddit_name = None
+    if 'report_submission' in report:
+        subreddit_name = splits[2]
+        subreddit_list[subreddit_name]['report_submission'] = report
+    elif 'report_topic_over_time' in report:
+        subreddit_name = splits[4]
+        subreddit_list[subreddit_name]['report_topic_over_time'] = report
+    elif 'report_topic' in report:
+        subreddit_name = splits[2]
+        subreddit_list[subreddit_name]['report_topic'] = report
+    
+
+
+subreddit_list = [{'subreddit': k, **v } for k, v in subreddit_list.items()]
 
 subreddit = st.selectbox(
     "Select Subreddit",
@@ -52,11 +60,31 @@ subreddit = st.selectbox(
     ),
 )
 
+# load reports
+selected_subreddit_item = next(
+    item for idx, item in enumerate(subreddit_list) if item["subreddit"] == subreddit
+)
+df_submissions = pd.read_json(
+    selected_subreddit_item["report_submission"]
+)
+
+df_topic_info = pd.read_json(
+    selected_subreddit_item["report_topic"]
+)
+
+df_topic_overtime = pd.read_json(
+    selected_subreddit_item["report_topic_over_time"]
+)
+
+# find min timestamp and max timestamp
+max_timestamp = df_submissions['created_utc'].max()
+min_timestamp = df_submissions['created_utc'].min()
+
 st.markdown(
     """
 ## Data source: [r/{}](https://www.reddit.com//r/startups)
 
-Time Range: 2018-01-01 ~ 2021-07-19
+** Time Range: {} ~ {} **
 
 - **title**: The title of the post
 - **num_comments**: Number of comments in a post
@@ -65,28 +93,16 @@ Time Range: 2018-01-01 ~ 2021-07-19
 
 ## How does it work?
 
-Posts are first clustered into similar topics and then sorted by num_comments/score.
+Posts are first clustered into similar topics and then sorted by num_comments/score. 
+
+** If the post cannot be assigned to any topic, the post is then labelled Topic #-1 **
 
 """.format(
-        subreddit
+        subreddit,
+        pd.Timestamp(min_timestamp, unit='s').strftime('%Y-%m'),
+        pd.Timestamp(max_timestamp, unit='s').strftime('%Y-%m')
     )
 )
-
-
-# load reports
-selected_subreddit_item = next(
-    item for idx, item in enumerate(subreddit_list) if item["subreddit"] == subreddit
-)
-df_submissions = pd.read_json(
-    "./reports/{}".format(selected_subreddit_item["report_submission"])
-)
-df_topic_info = pd.read_json(
-    "./reports/{}".format(selected_subreddit_item["report_topic"])
-)
-df_topic_overtime = pd.read_json(
-    "./reports/{}".format(selected_subreddit_item["report_topic_over_time"])
-)
-
 
 def concatenate(tokens):
     return ["_".join(token.split()) for token in tokens]
@@ -98,6 +114,7 @@ topic_description_short = [
     + " (count: {})".format(row["Count"])
     for idx, row in df_topic_info.iterrows()
 ]
+
 df_topic_info["Topic Description"] = topic_description_short
 
 # sort by topic count in descending order
@@ -107,14 +124,17 @@ df_topic_info =  df_topic_info.sort_values(
 
 topic_id = st.selectbox(
     "Select Topic",
-    df_topic_info["Topic"],
+    ['All Topics'] + df_topic_info["Topic"].tolist(),
     format_func=lambda topic_id: df_topic_info.loc[
         df_topic_info["Topic"] == topic_id, "Topic Description"
-    ].iloc[0],
+    ].iloc[0] if topic_id != 'All Topics' else 'All Topics (count {})'.format(len(df_submissions)),
 )
 
 
-df_submissions_by_topic = df_submissions[df_submissions["topic"] == topic_id]
+if topic_id != 'All Topics':
+    df_submissions_by_topic = df_submissions[df_submissions["topic"] == topic_id]
+else:
+    df_submissions_by_topic = df_submissions
 
 df_submissions_display = df_submissions_by_topic[
     ["title", "num_comments", "score", "title_cat", "permalink"]
@@ -306,7 +326,7 @@ def visualize_topics_over_time(df_topic_info, topics_over_time, width=1250, heig
     fig.update_xaxes(showgrid=True)
     fig.update_yaxes(showgrid=True)
     fig.update_layout(
-        xaxis_tickformat = '%Y-%b',
+        xaxis_tickformat = '%Y-%m',
         yaxis_title="Frequency",
         title={
             "text": "<b>Topics Trends",

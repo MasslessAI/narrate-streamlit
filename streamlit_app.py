@@ -27,11 +27,11 @@ st.markdown(
 """
 # Narrate Lab
 
-### We help marketer come up with great **content ideas** by extracting the most powerful, specific insights from **Reddit**. 
+### We help marketers come up with great **content ideas** by extracting the most powerful, specific insights from **Reddit**. 
 
 ### Specifically, we dive into subreddits and analyze **posts that are questions**, then we group these posts into **similar topics**. Next, posts are sorted based on the number of comments/score in each topic. The highly ranked posts can then be used for generating new content ideas.
 
-### To get started, select a subreddit from the dropdown menu below.
+### To get started, select a subreddit from the dropdown menu below. If the subreddit you want to analyze is not on the list, please contact us to [get your free report](https://docs.google.com/forms/d/e/1FAIpQLSf5q7_njFCYI9Ufh9OlClJ0fohRZ54N516_aBmD70IIseB26A/viewform).
 """)
 
 # default subreddit

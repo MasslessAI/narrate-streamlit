@@ -35,7 +35,7 @@ st.markdown(
 """)
 
 # default subreddit
-subreddit = "sneakers"
+subreddit = "entrepreneur"
 
 query_params = st.experimental_get_query_params()
 if query_params and "subreddit" in query_params:
@@ -104,6 +104,8 @@ Foe each post in the table, the following attributes are displayed:
 - **question_category**: A phrase in post title that indicates the post is a question
 
 To change topic, use the *"Select Topic"* dropdown menu below. 
+
+To rank posts by either *num_comments* or *score*, click the column header num_comments/score to sort the posts.
 
 You can also filter posts by *question_category*, which is a specific question indicative word/phrase in post titles. 
 For example, I only want to see posts whose title contains the word "how", we can click the "how" radio button in the *"Filter by question_category"* button list.

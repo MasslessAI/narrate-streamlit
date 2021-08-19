@@ -23,7 +23,16 @@ st.markdown(
 
 pd.set_option("display.max_colwidth", None)
 
-st.title("Narrate Lab")
+st.markdown(
+"""
+# Narrate Lab
+
+### We help marketer come up with great **content ideas** by extracting the most powerful, specific insights from **Reddit**. 
+
+### Specifically, we dive into subreddits and analyze **posts that are questions**, then we group these posts into **similar topics**. Next, posts are sorted based on the number of comments/score in each topic. The highly ranked posts can then be used for generating new content ideas.
+
+### To get started, select a subreddit from the dropdown menu below.
+""")
 
 # default subreddit
 subreddit = "sneakers"
@@ -86,16 +95,21 @@ st.markdown(
 
 ** Time Range: {} ~ {} **
 
+The following table shows a list of posts assigned to a specific topic. 
+Foe each post in the table, the following attributes are displayed:
+
 - **title**: The title of the post
 - **num_comments**: Number of comments in a post
 - **score**: The number of upvotes for the post
 - **question_category**: A phrase in post title that indicates the post is a question
 
-## How does it work?
+To change topic, use the *"Select Topic"* dropdown menu below. 
 
-Posts are first clustered into similar topics and then sorted by num_comments/score. 
+You can also filter posts by *question_category*, which is a specific question indicative word/phrase in post titles. 
+For example, I only want to see posts whose title contains the word "how", we can click the "how" radio button in the *"Filter by question_category"* button list.
 
-** If the post cannot be assigned to any topic, the post is then labelled Topic #-1 **
+
+** Note that if the post cannot be assigned to any topic, the post is then labelled Topic #-1 **
 
 """.format(
         subreddit,

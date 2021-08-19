@@ -373,6 +373,6 @@ top_k_percent = st.slider(
     format='Top %d Percent Most Frequent Topics'
 )
 
-df_top_topics = df_topic_info[1: math.floor(top_k_percent * (len(df_topic_info)-1) / 100.0)]
+df_top_topics = df_topic_info[1: math.floor(top_k_percent * len(df_topic_info) / 100.0)]
 topic_over_time_fig = visualize_topics_over_time(df_top_topics, df_topic_overtime)
 st.plotly_chart(topic_over_time_fig, use_container_width=True)

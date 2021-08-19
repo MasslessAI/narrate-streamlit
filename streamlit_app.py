@@ -82,7 +82,7 @@ min_timestamp = df_submissions['created_utc'].min()
 
 st.markdown(
     """
-## Data source: [r/{}](https://www.reddit.com//r/startups)
+## Data source: [r/{}](https://www.reddit.com//r/{})
 
 ** Time Range: {} ~ {} **
 
@@ -98,6 +98,7 @@ Posts are first clustered into similar topics and then sorted by num_comments/sc
 ** If the post cannot be assigned to any topic, the post is then labelled Topic #-1 **
 
 """.format(
+        subreddit,
         subreddit,
         pd.Timestamp(min_timestamp, unit='s').strftime('%Y-%m'),
         pd.Timestamp(max_timestamp, unit='s').strftime('%Y-%m')
@@ -367,7 +368,7 @@ top_k_percent = st.slider(
     "Show Only Most Frequent Topics (by the total number of mentions in the time range)",
     min_value = 10,
     max_value = 100,
-    value=100,
+    value=20,
     step = 10,
     format='Top %d Percent Most Frequent Topics'
 )

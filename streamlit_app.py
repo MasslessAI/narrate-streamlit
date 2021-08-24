@@ -9,6 +9,7 @@ import glob
 from collections import defaultdict
 
 st.set_page_config(layout="wide")
+pd.set_option("display.max_colwidth", None)
 
 st.markdown(
     """
@@ -16,22 +17,25 @@ st.markdown(
     div.row-widget.stRadio > div {
         flex-direction:row;
     }
+    .stSelectbox > label {
+        font-size: 20px;
+        font-weight: 700;
+    }
     </style>
 """,
     unsafe_allow_html=True,
 )
 
-pd.set_option("display.max_colwidth", None)
+
+
 
 st.markdown(
 """
-# Narrate Lab
+# Narrate Lab (Demo)
 
 ### We help marketers come up with great **content ideas** by extracting the most powerful, specific insights from **Reddit**. 
 
 ### Specifically, we dive into subreddits and analyze **posts that are questions**, then we group these posts into **similar topics**. Next, posts are sorted based on the number of comments/score in each topic. The highly ranked posts can then be used for generating new content ideas.
-
-### To get started, select a subreddit from the dropdown menu below. If the subreddit you want to analyze is not on the list, please contact us to [get your free report](https://docs.google.com/forms/d/e/1FAIpQLSf5q7_njFCYI9Ufh9OlClJ0fohRZ54N516_aBmD70IIseB26A/viewform).
 """)
 
 # default subreddit
@@ -61,6 +65,12 @@ for report in all_reports:
 
 subreddit_list = [{'subreddit': k, **v } for k, v in subreddit_list.items()]
 
+
+st.markdown(
+"""
+    # Step 1: Collect posts that are questions within a subreddit
+""")
+
 subreddit = st.selectbox(
     "Select Subreddit",
     [item["subreddit"] for item in subreddit_list],
@@ -89,46 +99,14 @@ df_topic_overtime = pd.read_json(
 max_timestamp = df_submissions['created_utc'].max()
 min_timestamp = df_submissions['created_utc'].min()
 
-st.markdown(
-    """
-## Data source: [r/{}](https://www.reddit.com//r/{})
-
-** Time Range: {} ~ {} **
-
-The following table shows a list of posts assigned to a specific topic. 
-Foe each post in the table, the following attributes are displayed:
-
-- **title**: The title of the post
-- **num_comments**: Number of comments in a post
-- **score**: The number of upvotes for the post
-- **question_category**: A phrase in post title that indicates the post is a question
-
-To change topic, use the *"Select Topic"* dropdown menu below. 
-
-To rank posts by either *num_comments* or *score*, click the column header num_comments/score to sort the posts.
-
-You can also filter posts by *question_category*, which is a specific question indicative word/phrase in post titles. 
-For example, I only want to see posts whose title contains the word "how", we can click the "how" radio button in the *"Filter by question_category"* button list.
-
-
-** Note that if the post cannot be assigned to any topic, the post is then labelled Topic #-1 **
-
-""".format(
-        subreddit,
-        subreddit,
-        pd.Timestamp(min_timestamp, unit='s').strftime('%Y-%m'),
-        pd.Timestamp(max_timestamp, unit='s').strftime('%Y-%m')
-    )
-)
-
 def concatenate(tokens):
     return ["_".join(token.split()) for token in tokens]
 
+#     + " (count: {})".format(row["Count"])
 
 topic_description_short = [
     "#{} ".format(row["Topic"])
     + " ".join(concatenate(row["Tokens"])[0:5])
-    + " (count: {})".format(row["Count"])
     for idx, row in df_topic_info.iterrows()
 ]
 
@@ -139,15 +117,126 @@ df_topic_info =  df_topic_info.sort_values(
     by=["Count"], ascending=False
 )
 
+st.warning("""
+👉 If the subreddit you want to analyze is not on the list, please contact us to [get your free report](https://docs.google.com/forms/d/e/1FAIpQLSf5q7_njFCYI9Ufh9OlClJ0fohRZ54N516_aBmD70IIseB26A/viewform).
+""")
+
+st.warning("""
+✏️ ** Data source: [r/{}](https://www.reddit.com//r/{}) **
+
+⌚ ** Time Range: {} ~ {} **
+
+We go through posts in this subreddit and look for people sharing their struggles. Specifically, we look for **phrases** that indicate someone is asking a question, such as
+"any tips", "suggestion", "need help", etc. 
+
+**Sample post which matches our criteria:**
+
+Post Title: "Anyone working with his spouse/partner on a business? **any tips** on managing relationship & entrepreneurship?"
+    """.format(
+        subreddit,
+        subreddit,
+        pd.Timestamp(min_timestamp, unit='s').strftime('%Y-%m'),
+        pd.Timestamp(max_timestamp, unit='s').strftime('%Y-%m')
+    ))
+    
+
+st.markdown(
+"""
+    # Step 2: Group Posts by Topic
+""")
+
+st.warning("""
+😀 Posts with similar topics are clustered together based on their semantic similarity.
+Topic is reprensented by the **top 10 most important keywords** in each group.
+
+Topic are sorted based on the number of posts in it.
+
+
+** Topic #-1 represents noise in the data. In other words, if a post cannot be assigned to any topic group, the post is then labelled Topic #-1. Typically, you want to ignore Topic #-1**
+""")
+
+def buildTopicTable(df):
+    gb = GridOptionsBuilder.from_dataframe(df)
+    gb.configure_default_column(
+        groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=True
+    )
+    gb.configure_side_bar()
+    gb.configure_grid_options(domLayout="normal")
+    gb.configure_grid_options(
+        defaultColDef={
+            "flex": 1,
+            "resizable": True,
+            "sortable": False,
+            "autoHeight": True,
+        },
+        enableCellTextSelection=True
+    )
+
+    gb.configure_grid_options(
+        columnDefs={
+            "Topic Description": {
+                "field": "Topic Description",
+                "resizable": True,
+                "sortable": False,
+                "wrapText": True,
+                "autoHeight": True,
+                "minWidth": 350,
+                "cellStyle": {"white-space": "normal", "word-break": "break-word"},
+            },
+            "count": {
+                "headerName": "Post Count",
+                "field": "Count",
+                "flex": 1,
+                "resizable": True,
+                "sortable": True,
+                "maxWidth": 150,
+            }
+        }
+    )
+    # gb.configure_selection("single")
+    # gb.configure_selection('single', use_checkbox=True, groupSelectsChildren=True, groupSelectsFiltered=True)
+    gridOptions = gb.build()
+    grid_response = AgGrid(
+        df,
+        gridOptions=gridOptions,
+        fit_columns_on_grid_load=True,
+        data_return_mode=DataReturnMode.AS_INPUT,
+        allow_unsafe_jscode=True,
+        theme='light'
+    )
+
+buildTopicTable(df_topic_info)
+
+st.markdown(
+"""
+    # Step 3: Explore a topic and understand what people asked
+""")
 topic_id = st.selectbox(
     "Select Topic",
     ['All Topics'] + df_topic_info["Topic"].tolist(),
     format_func=lambda topic_id: df_topic_info.loc[
         df_topic_info["Topic"] == topic_id, "Topic Description"
-    ].iloc[0] if topic_id != 'All Topics' else 'All Topics (count {})'.format(len(df_submissions)),
+    ].iloc[0] + " (Post count: {})".format(df_topic_info.loc[
+        df_topic_info["Topic"] == topic_id, "Count"
+    ].iloc[0]) if topic_id != 'All Topics' else 'All Topics (Post count: {})'.format(len(df_submissions)),
 )
 
 
+st.warning("""
+The following table shows a list of posts assigned to a specific topic. 
+For each post in the table, the following attributes are displayed:
+
+- **title**: The title of the post
+- **num_comments**: Number of comments in a post
+- **score**: The number of upvotes for the post
+- **question_category**: A phrase in the post title that indicates the post is a question
+
+To rank posts by either *num_comments* or *score*, click the column header num_comments/score to sort the posts.
+
+You can also filter posts by *question_category*, which is a specific question indicative word/phrase in post titles. 
+For example, I only want to see posts whose title contains the word "how", we can click the "how" radio button in the *"Filter by question_category"* button list.
+    """)
+    
 if topic_id != 'All Topics':
     df_submissions_by_topic = df_submissions[df_submissions["topic"] == topic_id]
 else:
@@ -194,6 +283,8 @@ df_submissions_display = df_submissions_display.sort_values(
 )
 
 
+
+
 def buildSubmissionTable(df):
     gb = GridOptionsBuilder.from_dataframe(df)
     gb.configure_default_column(
@@ -207,7 +298,8 @@ def buildSubmissionTable(df):
             "resizable": True,
             "sortable": False,
             "autoHeight": True,
-        }
+        },
+        enableCellTextSelection=True
     )
 
     gb.configure_grid_options(
@@ -269,8 +361,6 @@ def buildSubmissionTable(df):
     """
     )
     gb.configure_column("permalink", cellRenderer=cellsytle_jscode)
-    # gb.configure_selection("single")
-    # gb.configure_selection('single', use_checkbox=True, groupSelectsChildren=True, groupSelectsFiltered=True)
     gridOptions = gb.build()
     grid_response = AgGrid(
         df,
@@ -278,10 +368,13 @@ def buildSubmissionTable(df):
         fit_columns_on_grid_load=True,
         data_return_mode=DataReturnMode.AS_INPUT,
         allow_unsafe_jscode=True,
+        theme='light'
     )
 
+buildSubmissionTable(df_submissions_display)
 
-def visualize_topics_over_time(df_topic_info, topics_over_time, width=1250, height=800):
+
+def visualize_topics_over_time(df_topic_info, topics_over_time, selected_topics = None, width=1250, height=800):
     colors = [
         "#E69F00",
         "#56B4E9",
@@ -302,26 +395,25 @@ def visualize_topics_over_time(df_topic_info, topics_over_time, width=1250, heig
     topics_over_time = topics_over_time.groupby(["Topic", "year_month"], as_index=False)['Frequency'].sum()
 
     # Select topics
-    selected_topics = df_topic_info.Topic.values
+    if selected_topics is None:
+        selected_topics = df_topic_info.Topic.values
 
     # Prepare data
-    data = topics_over_time.loc[topics_over_time.Topic.isin(selected_topics), :]
-
-
+    data = topics_over_time
 
     # Add traces
     fig = go.Figure()
     for index, topic in enumerate(data.Topic.unique()):
+
         trace_data = data.loc[data.Topic == topic, :]
 
         row = df_topic_info.loc[df_topic_info["Topic"] == topic]
         topic_name = "#{} ".format(row["Topic"].iloc[0]) + " ".join(concatenate(row["Tokens"].iloc[0])[0:5])
 
-        #topic_name = topic_name["Topic Description"].iloc[0]
         fig.add_trace(
             go.Scatter(
-                x=trace_data.year_month,
-                y=trace_data.Frequency,
+                x=trace_data[3:].year_month,
+                y=trace_data.Frequency.rolling(3).mean(),
                 line_shape="spline",
                 mode="lines+markers",
                 marker_color=colors[index % 7],
@@ -335,7 +427,8 @@ def visualize_topics_over_time(df_topic_info, topics_over_time, width=1250, heig
                  hovertemplate="<br>".join([
                     "Date: %{x}",
                     "Frequency: %{y}"
-                ])
+                ]),
+                visible="legendonly" if topic not in selected_topics else True
             )
         )
 
@@ -366,29 +459,14 @@ def visualize_topics_over_time(df_topic_info, topics_over_time, width=1250, heig
     )
     return fig
 
-
-# buildTopicTable(df_topic_info)
-buildSubmissionTable(df_submissions_display)
-
-
-st.header("Topic Trends")
-st.markdown(
+st.warning(
     """
-The following figure shows you how often a particular topic has been mentioned in each month in the subreddit.
-You can see how the frequency of a topic changes over time. A higher number means that the percentage of posts mentioning that topic are higher.
+📈 **Topic Trends** The following figure shows you how often a particular topic has been mentioned in each month in the subreddit.
+You can see how the **Moving Average Frequency** of last three months of a topic changes over time. A higher number means that the percentage of posts mentioning that topic are higher.
 """
 )
 
-# topic over time
-top_k_percent = st.slider(
-    "Show Only Most Frequent Topics (by the total number of mentions in the time range)",
-    min_value = 10,
-    max_value = 100,
-    value=20,
-    step = 10,
-    format='Top %d Percent Most Frequent Topics'
-)
 
-df_top_topics = df_topic_info[1: math.floor(top_k_percent * len(df_topic_info) / 100.0)]
-topic_over_time_fig = visualize_topics_over_time(df_top_topics, df_topic_overtime)
+df_top_topics = df_topic_info
+topic_over_time_fig = visualize_topics_over_time(df_top_topics, df_topic_overtime, selected_topics=[topic_id])
 st.plotly_chart(topic_over_time_fig, use_container_width=True)

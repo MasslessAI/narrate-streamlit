@@ -31,7 +31,7 @@ st.markdown(
 
 st.markdown(
 """
-# Narrate Lab (Demo)
+# Narrate Lab
 
 ### We help marketers come up with great **content ideas** by extracting the most powerful, specific insights from **Reddit**. 
 
